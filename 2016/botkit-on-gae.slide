@@ -1,126 +1,146 @@
-Running Deploy Bot on AppEngine
+Running Deploy Bot on GAE
 
 Soshi Kido
-Engineer
+Engineer / Souzoh.,Inc
 @sou
 
-Souzoh, Inc.
-https://www.souzoh.com/jp/
-we're hiring ;)
+[[https://www.souzoh.com/jp/][We're hiring :)]]
 
 
 * Summary
 
-チームで使うデプロイボットを作ったよ
+Slack から Github に上がっている PR を指定すると
+GAE に自動デプロイしてくれるボットを作ったよ
 
-Slack から PR を指定すると自動でマージ＆デプロイ
+* ボット
 
-* チームについて
+[[https://github.com/howdyai/botkit][BotKit]] (Node.js) + GAE Flexible Environment
 
-.image ./images/atte.png
+- Slack 上の会話は BotKit で楽々実装（確認, 応答 ..）
+- BotKit は Flexible Environment で楽々動作
 
-- see [[https://speakerdeck.com/ttsuruoka/merukari-atute-wozhi-eru-google-app-engine-to-golang][「メルカリ アッテ」を支える Google App Engine と Golang]]
-- Go/GAE で開発＆運用
+* ボット
 
-* ニーズ
-
-デプロイを自動化したい
-
-- make deploy_all で全 Service（Module）を GAE にデプロイ
-
-ちょい面倒
-
-- 可視化/共有に slack で宣言
-- 終わるのを待ってコンソールからバージョンを切替
-
-決められた手順をその通りに実行する → ボットに任せたい
-
-* デプロイボットを作ろう
-
-Slack で指示すると AppEngine へのデプロイまで自動で行ってくれるボット
-
-但し..
-
-- サーバは立てたくない
-- Go/GAE と同じようにボットもサーバや運用を考えることなくただ動いて欲しい
-
-* 作りました
-
-.image ./images/bot-working.png
-
-- [[https://github.com/howdyai/botkit][BotKit]] を使い GAE 上で動作
-
-* ワークフロー
-
-機能単位に pull request を切って開発、
-最後にチームレビューを入れて ok なら LGTM ラベルを貼る
-
-あとはボットに pull request を指定してデプロイ指示を送れば進む
-
-- LGTM タグの有無を確認（無ければ終了）
-- 一度「デプロイして良い？」の問い返す（不許可なら終了）
-- "shipit" のコメントを付けて pull request をマージ
-
-ボットの仕事はここまで
-実際のデプロイは CI に任せる
-
-* デプロイ
-
-CI 標準のデプロイ機能があるが今回は使えず
-
-- Travis や Drone CI はルートディレクトリ直下の app.yaml をコマンドに取る
-- マルチサービス構成では自作する必要があった
-- index.yaml や queue.yaml も上げたいので app.yaml 指定では足りない
-
-
-* デプロイ
-
-CI で自動テストに成功した後、条件判定してデプロイを実行
-
-- master ブランチならデプロイ
-- 最終コメントに "shipit" の文字があれば appcfg default_version でバージョン切替
-
-- AppEngine SDK を wget して解凍している
-- バージョン番号は日時とコミットハッシュから払い出す
-- マージコメントを使って Travis の動作を指示
-- （Travis ボットも Slack に入れた）
-
-* ボット導入後
-
-幸せになれた
-
-- デプロイでの「気遣い」が無くなった
-- さくさくデプロイが回るように（"PR 閉じる"=デプロイ）
-
-
-* BotKit / GAE で作ってみて
-
-普通に動き過ぎてネタが無い..
+AppEngine のサンプルコードを BotKit のサンプルコードに差し替えると即動く
 
 // [START app]
 /*    ここに書く  */
 // [END app]
 
-- AppEngine のサンプルコードを持ってきて BotKit のサンプルコードに差し替えると即動く
-- Standard Environment と違いデプロイに 1, 2 分かかる
+- ボットが複数起動しないよう manual_scaling でインスタンス数を 1 に絞る
+- exit しないので終了コマンドは動かない
+- デプロイは 1,2 分と遅いので頻繁な確認を要するケースは辛そう
+
+
+* ボット..
+
+普通に動き過ぎてネタが無いので GAE 自動デプロイの話でも
+
+* デプロイ対象
+
+.image ./images/atte.png
+
+[[https://speakerdeck.com/ttsuruoka/merukari-atute-wozhi-eru-google-app-engine-to-golang][「メルカリ アッテ」を支える Google App Engine と Golang]]
+
+- Standard Environment
+- マルチサービス（Module）構成
+
+これを自動デプロイしたい
+
+* 完成図
+
+.image images/bot-working.png
+
+Github に上がっている PR を指定すると自動でマージ＆デプロイ
+
+* 流れ（仮）
+
+- Slack でボットにデプロイ対象（pull request）を伝える
+- ボットが Github API を叩いて PR をマージする
+- CI が拾う
+- CI でテスト成功後、デプロイ＆デフォルトバージョンを切り替える
+- Slack に完了通知を送る
+
+* 実際は
+
+最近の CI は AppEngine 対応が付いている（Drone, Travis）
+
+但し git 管理直下の app.yaml を gcloud preview app deploy するだけ
+
+- Standard Environment (Go) だと上がらない
+- マルチサービス構成に対応していない
+- index.yaml や queue.yaml が上がらない
+- デフォルトバージョンの切替はない
+
+→ 今回は Travis の after_success で自作スクリプトを走らせることに
+
+* 自作スクリプト
+
+- AppEngine SDK をダウンロード＆解凍
+- 全モジュールそれぞれで appcfg update ./ を発行
+- appcfg set_default_version でバージョンを切替
+
+やりたいこと全てが出来る
+
+（トークンは travis コマンドで暗号化して .travis.yaml に埋め込む）
+
+* ワークフロー
+
+エンジニア
+
+- pull request ベースで開発を進め、チームレビューが通ると LGTM ラベルを貼る
+- Slack でボットに「deploy #123」と指示を送る
+
+ボット
+
+- LGTM ラベルの有無を確認
+- 「デプロイして良いか」確認を取る
+- ok なら "shipit" のマージコメントを付けてマージ
+
+CI
+
+- テスト成功後にスクリプト実行
+- master ブランチならデプロイする
+- "shipit" のマージコメントがあればデフォルトバージョンを切り替える
+
+* 動作中
+
+.image ./images/bot-working.png
+
+* ボット導入後
+
+幸せになれた
+
+- デプロイでの小さな面倒や気疲れが無くなった　
+- さくさくデプロイが回る（"PR 閉じる" = デプロイ）
 
 * もっと幸せになりたい
 
 時々落ちる
 
 - 未調査
-- インスタンスは落ちないが、中の BotKit が死ぬ
+- インスタンスは落ちないが Slack 上から Bot が落ちている
+- コンソール上でインスタンス再起動しても変わらず
+- 再デプロイで戻る
 
 もっと自動化したい
 
-- version 削除が自動化できていない（120個溜まる前に手動削除）
+- version 削除を自動化したい（今は手動削除）
 
-Travis を高機能化したい
+* もっと幸せになりたい
 
-- デプロイ自体の完了や失敗を通知していない
+Travis ボットを高機能化したい（標準→自前ボット）
+
+- デプロイ自体の完了や失敗を通知したい
+- 口調を変えたい（今はシステムメッセージそのまま）
+
+テストを通したい
+
+- どうも Travis 上で aetest.NewContext の辺りで固まるぽい
+- Travis で動かないなら外に切り出すか脱 Travis か..
 
 * まとめ
 
+- Flexible Environment のおかげで Node アプリも楽々運用できている
 - GAE のデプロイも自動化すると幸せになれる
-- Flexible Environment のおかげで Node アプリも手軽に運用（手軽過ぎて話すことが無い..）
 
