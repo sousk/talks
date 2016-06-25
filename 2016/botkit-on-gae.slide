@@ -49,8 +49,6 @@ AppEngine のサンプルコードを BotKit のサンプルコードに差し�
 
 * 完成図
 
-.image images/bot-working.png
-
 Github に上がっている PR を指定すると自動でマージ＆デプロイ
 
 * 流れ（仮）
